@@ -1,0 +1,15 @@
+* Análise de Aplicação baseada em Tarefas em Arquitetura Híbrida CPU/GPU
+** Código Fonte e Artigo Reprodutível:
+- [[https://github.com/viniciusvgp/erad2017]] (Obs: o código fonte R está
+  dentro do arquivo [[https://raw.githubusercontent.com/viniciusvgp/erad2017/master/erad2017.org][erad2017.org]])
+
+** Figura Interativa:
+- [[http://perf-ev-runtime.gforge.inria.fr/erad2017/ERAD2017-Figure1.html][Figura 1]]
+
+
+* how to publish this file 					   :noexport:
+#+begin_src sh :results output :exports both
+   scp web.html  user@scm.gforge.inria.fr:/home/groups/perf-ev-runtime/htdocs/erad2017/index.html
+#+end_src
+
+#+RESULTS:

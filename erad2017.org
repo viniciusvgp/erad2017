@@ -1,0 +1,952 @@
+
+# -*- coding: utf-8 -*-
+# -*- mode: org -*-
+
+#+TITLE: Blablabla
+#+AUTHOR: Vinícius Garcia Pinto, Lucas Mello Schnorr, Arnaud Legrand
+
+#+STARTUP: overview indent
+#+LANGUAGE: pt-br
+#+OPTIONS: H:3 creator:nil timestamp:nil skip:nil toc:nil num:t ^:nil ~:~
+#+OPTIONS: author:nil title:nil date:nil
+#+TAGS: noexport(n) deprecated(d) ignore(i)
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+* Latex options                                                      :ignore:
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [12pt]
+#+LATEX_HEADER: \usepackage{sbc-template}
+#+LATEX_HEADER: \usepackage{graphicx,url}
+#+LATEX_HEADER: \usepackage[brazil]{babel}   
+#+LATEX_HEADER: %\usepackage[latin1]{inputenc}  
+
+     
+#+LATEX_HEADER: \sloppy
+
+* Configuration for org export + ignore tag (Start Here)           :noexport:
+#+name: ieeetran
+#+begin_src emacs-lisp :results output :session :exports both
+(setq ess-ask-for-ess-directory nil)
+(add-to-list 'load-path ".")
+(require 'ox-extra)
+(ox-extras-activate '(ignore-headlines))
+(add-to-list 'org-latex-classes
+             '("article"
+               "\\documentclass{article}"
+               ("\\section{%s}" . "\\section*{%s}")
+               ("\\subsection{%s}" . "\\subsection*{%s}")
+               ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+               ("\\paragraph{%s}" . "\\paragraph*{%s}")
+               ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+
+#+end_src
+
+#+RESULTS: ieeetran
+
+* Initialization                                                   :noexport:
+#+name: pdfcrop
+#+header: :var file="all_runtime.pdf"
+#+BEGIN_SRC sh :results silent :exports none
+pdfcrop $file
+echo "Cropping done"
+#+END_SRC
+
+* Data for figures                                                 :noexport:
+** Global variables
+*** Parallel package
+By default, paralell functions use always 2 cores, but we can get the
+number of cores using the function detectCores and set the variable
+mc.cores to this value.
+
+*** Var Definition
+#+name: globalvar
+#+begin_src R :results none :session R3  :noexport:
+require(parallel)
+
+PAR_CORES <- detectCores(all.tests=TRUE, logical=FALSE)
+if(is.na(PAR_CORES)){
+    PAR_CORES <- 1          # because detectCores may return ‘NA’
+}
+#+end_src
+
+** Basic R functions:
+*** Installing libraries
+#+begin_src R :results output :session R3  :noexport:
+mirror = "http://cran.us.r-project.org"
+packages <- c("plyr", "dplyr", "ggplot2", "gtools", "data.table", "gridExtra", "scales", "reshape", "RColorBrewer", "lpSolve", "plotly", "Rcpp", "inline", "dtplyr", "directlabels", "gtable", "knitr", "flexdashboard");
+packages <- packages[sapply(packages, function(x){0==length(find.package(x,quiet=T))})]
+if(length(packages) > 0) 
+    install.packages(packages, repos=mirror)
+#+end_src
+
+*** Loading libraries
+#+name: load_libraries
+#+begin_src R :results output :session R3  :noexport:
+  # Adding necessary libraries
+  library(plyr)
+  library(dplyr)
+  library(ggplot2)
+  library(gtools)
+  library(data.table)
+  library(gridExtra)
+  library(scales)
+  library(reshape)
+  library(parallel)
+  library(RColorBrewer)
+  library(lpSolve)
+  library(plotly)
+  library(Rcpp)
+  library(inline)
+  library(dtplyr)
+  library(grid)
+  library(gtable)
+  library(knitr)
+  library(flexdashboard)
+#+end_src
+
+#+RESULTS: load_libraries
+: Error in library(dtplyr) : there is no package called ‘dtplyr’
+: 
+: Attaching package: ‘directlabels’
+: 
+: The following object is masked from ‘package:reshape’:
+: 
+:     merge_recurse
+
+*** Computing dependencies coordinates
+   To plot dependencies edges we need the information about where the
+    dependent task was executed (ResourceId is used as y-axis).
+#+name: compute_dep_coord
+#+begin_src R :results none :session R3  :var gdep=globalvar :noexport:
+
+# this is the original R function
+compute_dep_resourceidR <- function(df, df_all){ 
+  df_dep_xy = df#[,.( JobId, Dependent, ResourceId, Start, End, Value, i, j, k)]
+  
+  #df_dep_xy$ResourceId = as.character(df_dep_xy$ResourceId)
+  
+  tmp1 <- mclapply(df_dep_xy[,Dependent], 
+                   function(id, dataframe){
+                     res <- dataframe[dataframe$JobId == id,.(Start,End, ResourceId)]
+                     if(nrow(res) == 0){
+                       return(data.table(Start = NA, End = NA, ResourceID = NA))
+                     } else {
+                       return(res)
+                     }
+                   }, 
+                   #dataframe = unique(df_dep_xy[,.(JobId, Start, End, ResourceId)]), mc.cores=PAR_CORES) 
+                   dataframe = unique(df_all[,.(JobId, Start, End, ResourceId)]), mc.cores=PAR_CORES) 
+  tmp1 <- simplify2array(tmp1, higher = FALSE)
+  df_dep_xy <- df_dep_xy[, `:=` ( DepStart = tmp1[1,], DepEnd = tmp1[2,], DepResourceId = tmp1[3,] )]
+  
+  df_dep_xy$DepStart = as.numeric(df_dep_xy$DepStart)
+  df_dep_xy$DepEnd = as.numeric(df_dep_xy$DepEnd)
+  
+  df_dep_xy$DepResourceId = unlist(df_dep_xy$DepResourceId)
+  df_dep_xy[DepResourceId == "character(0)"]$DepResourceId = NA
+  
+  setkey(df_dep_xy)
+  df_dep_xy = unique(df_dep_xy)
+  
+  df_dep_xy
+}
+
+# cpp equivalent function to compute_dep_resourceidR
+cppFunction('
+DataFrame compute_dep_resourceidCPP(DataFrame dframe, DataFrame dframeAll){
+  IntegerVector dfdependent = dframe["Dependent"];
+  
+  IntegerVector dfjobid = dframeAll["JobId"];
+  IntegerVector dfresourceid = dframeAll["ResourceId"];
+  NumericVector dfstart = dframeAll["Start"];
+  NumericVector dfend = dframeAll["End"];
+  
+  NumericVector outdepstart(dfdependent.size());
+  NumericVector outdepend(dfdependent.size());
+  IntegerVector outdepresourceid(dfdependent.size());
+  
+  int j = 0;
+  for(IntegerVector::iterator it = dfdependent.begin() ; it != dfdependent.end(); it++, j++){
+    outdepstart[j] = NA_REAL;
+    outdepend[j] = NA_REAL;
+    outdepresourceid[j] = NA_INTEGER;
+    for(int i=0; i<dfjobid.size(); i++){
+      if(*it == dfjobid[i]){
+        outdepstart[j] = dfstart[i];
+        outdepend[j] = dfend[i];
+        outdepresourceid[j] = dfresourceid[i];
+        break;
+      }
+    }
+  }
+  dframe["DepStart"] = outdepstart;
+  dframe["DepEnd"] = outdepend;
+  dframe["DepResourceId"] = outdepresourceid;
+  return(dframe);  
+}
+')
+
+# here we can select R or CPP implementation
+compute_dep_resourceid <- compute_dep_resourceidCPP
+
+#+end_src
+
+#+RESULTS: compute_dep_coord
+
+*** Computing indirect dependencies 
+#+name: compute_indirect_dependencies
+#+begin_src R :results output :session R3  :var gdep=globalvar  :noexport:
+
+# tracking all indirect dependencies
+# this is the original R function (but recursive functions in R are too slow)
+trackdepR <- function(jid, df, maxR){
+    if((jid == 0) | (maxR == 0)){ 
+        return ("")
+    } 
+    res <- mclapply(df[JobId == jid ,Dependent], function(j, d,m) trackdepR(j, d, m), d=df, m=(maxR - 1), mc.cores=PAR_CORES)
+    return( c(jid, unlist(res) ))
+}
+
+# cpp equivalent function to trackdepR
+cpptrackdepCode <- '
+std::list<int> trackdepCPPInternal(const int jid, IntegerMatrix im, const int maxR) {
+  std::list<int> v;
+  if(jid==0 || maxR==0)
+    return(v);
+  for(int i=0; i<im.nrow(); i++){
+    if(jid==im(i,0)){
+      //v.splice(v.end(),trackdepCPPInternal(im(i,1), im, maxR-1));
+      std::list<int> tmpV = trackdepCPPInternal(im(i,1), im, maxR-1);
+      v.splice(v.end(),tmpV);
+    }
+  }
+  v.push_front(jid);
+  return(v);
+}
+'
+trackdepWrapper <-cxxfunction(signature(jId="int", dF="matrix", MaxR="int" ),
+                          plugin = "Rcpp",
+                          incl=cpptrackdepCode,
+                          body='
+int JID = Rcpp::as<int>(jId);
+int MAXR = Rcpp::as<int>(MaxR);
+return Rcpp::wrap( trackdepCPPInternal(JID, dF, MAXR) );
+                          ')
+
+trackdepCPP <- function(jid, df, maxR){
+    return(trackdepWrapper(jid, as.matrix(df), maxR))
+}
+
+# here we can change to use R or CPP implementation
+trackdep <- trackdepCPP
+#trackdep <- trackdepR
+
+compute_indirect_dep <- function(iDF, depDF, maxRec) {
+  # tracking all indirect dependencies
+  result <- mclapply(unique(iDF[, Delayed]), function(j,d,m) trackdep(j, d, m), d=depDF[,.(JobId, Dependent)], m=maxRec, mc.cores=PAR_CORES)
+  
+  # Count the number of dependencies in each position of the list   
+  nRep <- as.vector(unlist( lapply(result, length) ))
+  
+  # Replicate elements to the number indirect dependencies for each one
+  aux <- as.vector(unlist( rep(as.vector(unique(iDF[, Delayed])),nRep) ))
+  
+  # Data frame with the Delayed Job and all previous dependencies
+  tmpdf2<-data.table(aux, as.numeric(as.list(unlist(result))))
+  names(tmpdf2)<-c("Delayed","IndirectDependent")
+  
+  setkey(tmpdf2)
+  tmpdf2 = unique(tmpdf2)
+  na.omit(tmpdf2)#[tmpdf2$Delayed != tmpdf2$IndirectDependent,]
+}
+#+end_src
+
+#+RESULTS: compute_indirect_dependencies
+
+*** Computing % of idle time per resource
+#+name:idlepercentage 
+#+begin_src R :results output :session R3   :noexport:
+idlepercentage <- function(dfAllIdle, dfAll){ 
+    dfAllIdleRatio <- merge( dfAllIdle %>% group_by(Sched, ResourceId) %>% summarize(IdleDuration=sum(Duration)), dfAll %>% group_by(Sched, ResourceId) %>% select(End) %>% summarize(End=max(End)), by=c("Sched", "ResourceId") )
+    dfAllIdleRatio$Ratio <- (dfAllIdleRatio$IdleDuration * 100) / dfAllIdleRatio$End
+    dfAllIdleRatio
+}
+#+end_src
+
+#+RESULTS: idlepercentage
+
+*** Dependencies by JobId only
+Perform the computation of indirect dependencies only for a given jobid.  
+#+name: depbyjobid
+#+begin_src R :results output :session R3  :var fdep=compute_indirect_dependencies  :noexport:
+dependenciesByJobId <- function(delayedId, df, maxRec){
+    # all dep of delayedId
+    result <- trackdep(delayedId, df[,.(JobId, Dependent)], maxRec)
+
+    # Count the number of dependencies in each position of the list   
+    nRep <- length(result)
+
+    # Replicate delayedId with the number of its indirect dependencies 
+    aux <- rep(delayedId, nRep)
+
+    # Data frame with the Delayed Job and all previous dependencies
+    tmpdf2<-data.table(aux, as.numeric(as.list(unlist(result))))
+    names(tmpdf2)<-c("Id","IndirectDependent")
+
+    setkey(tmpdf2)
+    tmpdf2 = unique(tmpdf2)
+    tmpdf2 = na.omit(tmpdf2)
+
+    tmpdf2
+}
+#+end_src
+
+#+RESULTS: depbyjobid
+
+#+RESULTS: indirectdepjobid
+
+*** Critical Path
+#+name: criticalPath
+#+begin_src R :results output :session R3  :var fdep=load_libraries :noexport:
+criticalPathTrack <- function(id, df){
+   res <- df %>% filter(IndirectDependent == id) %>% filter(DepEnd == max(DepEnd, na.rm=TRUE))
+   if(nrow(res)){
+       return( rbind(res, criticalPathTrack(res$Dependent, df) )  )
+   } else {
+       return( data.table() )
+   }
+}
+
+#+end_src
+
+#+RESULTS: criticalPath
+
+*** Estimating makespan using linear programming
+#+name: makespanestimation
+#+begin_src R :results output :session R3  :noexport:
+require(lpSolve)
+makespanestimation <- function(df, ncpu, ngpu){
+    # using min to avoid problems with kernels that do not have implementation for gpus or for cpu
+    cpu_gemm  <- min(df[Value == "dgemm"  & Type == "CPU", Mean], 10000000000)
+    cpu_trsm  <- min(df[Value == "dtrsm"  & Type == "CPU", Mean], 10000000000)
+    cpu_syrk  <- min(df[Value == "dsyrk"  & Type == "CPU", Mean], 10000000000)
+    cpu_potrf <- min(df[Value == "dpotrf" & Type == "CPU", Mean], 10000000000)
+
+    gpu_gemm  <- min(df[Value == "dgemm"  & Type == "CUDA", Mean], 10000000000)
+    gpu_trsm  <- min(df[Value == "dtrsm"  & Type == "CUDA", Mean], 10000000000)
+    gpu_syrk  <- min(df[Value == "dsyrk"  & Type == "CUDA", Mean], 10000000000)
+    gpu_potrf <- min(df[Value == "dpotrf" & Type == "CUDA", Mean], 10000000000)
+
+    # objective function 
+    #                  cpu-gemm, cpu-trsm, cpu-syrk, cpu-potrf, gpu-gemm, gpu-trsm, gpu-syrk, gpu-potrf,       T
+    f.obj <- c(               0,        0,        0,         0,        0,        0,        0,         0,       1)   # Minimize only T (makespan)
+
+    # matrix of constraint coefficients
+    f.con <- matrix( c(    
+        #              cpu-gemm, cpu-trsm, cpu-syrk, cpu-potrf, gpu-gemm, gpu-trsm, gpu-syrk, gpu-potrf,       T
+                              1,        0,        0,         0,        1,        0,        0,         0,       0,   # number of cpu_gemm  + number of gpu_gemm = num of gemm
+                              0,        1,        0,         0,        0,        1,        0,         0,       0,   # number of cpu_trsm  + number of gpu_trsm = num of trsm
+                              0,        0,        1,         0,        0,        0,        1,         0,       0,   # number of cpu_syrk  + number of gpu_syrk = num of syrk
+                              0,        0,        0,         1,        0,        0,        0,         1,       0,   # number of cpu_potrf + number of gpu_potrf = num of potrf
+                       cpu_gemm, cpu_trsm, cpu_syrk, cpu_potrf,        0,        0,        0,         0, -1*ncpu,   # time of cpu kernels multiplied by number of cpus
+                              0,        0,        0,         0, gpu_gemm, gpu_trsm, gpu_syrk, gpu_potrf, -1*ngpu,   # time of cuda kernels multiplied by number of gpus
+                              1,        0,        0,         0,        0,        0,        0,         0,       0,   # number of cpu_gemm  >= 0                  
+                              0,        1,        0,         0,        0,        0,        0,         0,       0,   # number of cpu_trsm  >= 0                  
+                              0,        0,        1,         0,        0,        0,        0,         0,       0,   # number of cpu_syrk  >= 0                  
+                              0,        0,        0,         1,        0,        0,        0,         0,       0,   # number of cpu_potrf >= 0                  
+                              0,        0,        0,         0,        1,        0,        0,         0,       0,   # number of gpu_gemm  >= 0                  
+                              0,        0,        0,         0,        0,        1,        0,         0,       0,   # number of gpu_trsm  >= 0 
+                              0,        0,        0,         0,        0,        0,        1,         0,       0,   # number of gpu_syrk  >= 0         
+                              0,        0,        0,         0,        0,        0,        0,         1,       0    # number of gpu_potrf >= 0 
+                                                                                                                ), nrow=14, byrow=TRUE
+)
+    # direction of constraints
+    f.dir <- c(                          "=",                           "=",                           "=",                            "=", "<=", "<=", ">=", ">=", ">=", ">=", ">=", ">=", ">=", ">=")
+    # right-hand sides of the matrix of constraints
+    f.rhs <- c(sum(df[Value == "dgemm",Num]), sum(df[Value == "dtrsm",Num]), sum(df[Value == "dsyrk",Num]), sum(df[Value == "dpotrf",Num]),    0,    0,    0,    0,    0,    0,    0,    0,    0,    0)
+
+    return( lp("min", f.obj, f.con, f.dir, f.rhs) )
+}
+#+end_src 
+
+#+RESULTS: makespanestimation
+*** Estimating critical path
+#+name: cpestimation
+#+begin_src R :results output :session R3  :noexport:
+cpestimation <- function(df, ncpu, ngpu){
+    auxdf <- df[Value %in% c("dpotrf", "dtrsm", "dsyrk")] %>% group_by(Value) %>% summarize( min=min(Mean), total = sum(Num))
+    return(auxdf[Value=="dpotrf"]$total * auxdf[Value=="dpotrf"]$min + (auxdf[Value=="dpotrf"]$total-1) * (auxdf[Value=="dtrsm"]$min + auxdf[Value=="dsyrk"]$min))
+}
+
+#+end_src
+
+#+RESULTS: cpestimation
+
+*** Computing direct and indirect dependencies by jobid
+#+name: computedependenciesjobid
+#+begin_src R :results output :session R3  :var fdep=depbyjobid :var fdep2=compute_dep_coord  :noexport:
+computeDependenciesbyJobId <- function(id, df, depdf, maxRecursion){
+# id: task id
+# df: basic df from csv dumped trace
+# depdf: basic df from tasks.rec 
+# maxRecursion: number of degrees of recursion used to compute indirect dependencies (1 means only direct dependencies)
+
+    # first compute only id of all dependencies
+    aux <- dependenciesByJobId(id, depdf, maxRecursion+1)
+
+    # compute dependencies for each task in the list of indirect dependencies
+    aux2 <- compute_dep_resourceid(tmpM <- merge(depdf[JobId %in% aux$IndirectDependent], df[,.(JobId, ResourceId, Start, End)], by="JobId"), df[JobId %in% tmpM$JobId | JobId %in% tmpM$Dependent])
+
+    merge(aux, aux2, by.x="IndirectDependent", by.y="JobId")[,.(Id, IndirectDependent, Dependent, ResourceId, Start, DepResourceId, DepStart, DepEnd)]
+}
+
+#+end_src
+
+#+RESULTS: computedependenciesjobid
+
+*** Identifying independent critical path of potrf tasks using union-find
+#+name: indeppotrfcp
+#+begin_src R :results output :session R3  :noexport:
+indepPotrfCP <- function(dt){
+    makeset <- function(lsmembers){
+        tmpset <- list(parent=vector(), rank=vector())
+        for(id in lsmembers){ 
+            tmpset$parent[[as.character(id)]] <- id
+            tmpset$rank[[as.character(id)]] <- 0 
+        }
+        return(tmpset)
+    }
+
+    unionset <- function(x, y){
+        linkset(findset(x), findset(y))
+    }
+
+    linkset <- function(x, y){
+        if (auxset$rank[[as.character(x)]] > auxset$rank[[as.character(y)]]){
+            auxset$parent[[as.character(y)]] <<- x
+        } else {
+            auxset$parent[[as.character(x)]] <<- y
+            if(auxset$rank[[as.character(x)]] == auxset$rank[[as.character(y)]]){
+                auxset$rank[[as.character(y)]] <<- auxset$rank[[as.character(y)]] + 1
+            }
+        }
+    }
+
+    findset <- function(x){
+        #print(sprintf("findset: %s", x))
+        #print(str(auxset))
+        if(x != auxset$parent[[as.character(x)]]){
+            auxset$parent[[as.character(x)]] <<- findset(auxset$parent[[as.character(x)]])
+        }
+        return (auxset$parent[[as.character(x)]])
+    }
+
+    samecomponent <- function(x, y){
+        if(findset(x) == findset(y))
+            return(TRUE)
+        else
+            return(FALSE)
+    }
+
+    auxset <- makeset(unique(c(dt$IndirectDependent, dt$Dependent)))
+
+    mapply(function(xx, yy){
+        unionset(xx, yy)
+    },dt$IndirectDependent, dt$Dependent)
+
+    res <- data.table(id=unique(dt$Id), path=unlist(lapply(unique(dt$Id), findset)))
+    res$pathid <- id(res[,.(path)])
+    res
+}
+
+#+end_src
+
+#+RESULTS: indeppotrfcp
+
+*** working with repetitions
+# multiple csv/rec files
+**** Reading traces(csv) from multiple executions
+#+name: readmultiplecsv
+#+begin_src R :results output :session R3  :var fdep=load_libraries :var fdep2=globalvar  :noexport:
+readMultipleCsv <- function(dir, pat, states=c("dpotrf", "dtrsm", "dsyrk", "dgemm", "Idle", "Sleeping"), statesMinTime=c("dpotrf", "dtrsm", "dsyrk", "dgemm")){
+    rbindlist(
+mclapply(list.files(path=dir, pattern=pat, full.names=TRUE), function(file){
+                           dt=data.table(read.csv(file, strip.white=TRUE, colClasses=c("Tag"="factor")))
+                           dt=dt[dt$Value %in% states,]
+                           #dt=dt[!(dt$Value %in% c(" Initializing", " Deinitializing", " Overhead", " Nothing", " Sleeping", " malloc_pinned"," free_pinned", " execute_on_all_wrapper", " Building task", " Submittings task", " Allocating", " AllocatingReuse", " Callback", " Su", " Executing", " PushingOutput", " Reclaiming", " Scheduling",  " WritingBack", " WritingBackAsync", " Freeing")),]
+                           dt$Sched=strsplit(basename(file), "-")[[1]][2]
+                           dt$r=sub(".csv", "",strsplit(basename(file), "-")[[1]][3])
+                           m <- min(dt[dt$Value %in% statesMinTime,]$Start)
+                           dt$MinStart <- m
+                           dt$Start <- dt$Start - m
+                           dt$End <- dt$Start+dt$Duration
+                           dt$ResourceId = factor(dt$ResourceId, levels=mixedsort(levels(dt$ResourceId)))
+                           dt$Sched = factor(dt$Sched)
+                           dt$r = factor(dt$r)
+                           dt=dt[, Nature:=NULL]
+                           dt=dt[, Type:=NULL]
+                           dt=dt[, Depth:=NULL]
+                           dt=dt[, Footprint:=NULL]
+
+                           return(droplevels(dt[Start >= 0 & ((ResourceId %like% "CPU") | (ResourceId %like% "CUDA")),]))
+                       }
+                     , mc.cores=PAR_CORES)
+              )
+}
+#+end_src
+
+#+RESULTS: readmultiplecsv
+    
+**** Reading tasks.rec from multiple executions
+#+name: readmultipletasksrec
+#+begin_src R :results output :session R3  :var fdep=load_libraries :var fdep2=globalvar :noexport:
+readMultipleTasksRec <- function(dir, pat){
+    rbindlist( mclapply(list.files(path=dir, pattern=pat, full.names=TRUE), function(file){
+                            dt=data.table(read.csv(file,  head=FALSE, sep=",", col.names = c("JobId", "DependsOn"), na.strings=""))
+                            dt$DependsOn = as.character(dt$DependsOn)
+                            dt[is.na(dt)] <- "0"
+  
+                            tmpList <- strsplit(as.character(dt$DependsOn), "[ ]+")
+                            n <- lapply(tmpList, length)
+                            tmpdf <- data.table(rep(as.vector(dt$JobId), as.vector(unlist(n))), as.numeric(unlist(tmpList)))
+                            names(tmpdf) <- c("JobId", "Dependent")
+                            tmpdf$Sched=strsplit(basename(file), "-")[[1]][2]
+                            tmpdf$r=sub(".rec.csv", "",strsplit(basename(file), "-")[[1]][3])
+                            return(droplevels(tmpdf))
+                        }, mc.cores=PAR_CORES)
+        )
+
+}
+#+end_src
+
+#+RESULTS: readmultipletasksrec
+
+** Graphics Functions
+*** Gantt with Outliers
+#+name: ganttoutliers
+#+begin_src R :results output  :session R3  :noexport:
+gantt_outliers <- function(df, plotly=FALSE){
+    # simple function to detect outliers
+    findBorder <- function(x) {
+        quantile(x)["75%"] + (quantile(x)["75%"] - quantile(x)["25%"]) * 1.5
+    }
+
+    df <- df %>% mutate(Type=ifelse(grepl("CUDA", ResourceId), "CUDA", "CPU")) %>% group_by(Type, Value, Sched, r) %>% mutate(Border= findBorder(Duration)   )  
+    df$outlier <- ifelse(df$Duration>df$Border & !(df$Value %in% c("Idle", "Sleeping")), TRUE, FALSE)
+
+    #merging idle and sleeping states    
+    df[df$Value %in% c("Idle", "Sleeping")]$Value <- "Idle/Sleeping"    
+
+    # tasks
+    if(plotly){ # there is a bug in plotly when using alpha as a variable (github.com/ropensci/plotly/issues/641), so this is an alternative version to use while the bug is not fixed
+        basic <-  ggplot(df[Start >= 0,], aes(x=Start, y=factor(ResourceId))) + # only to show Resources names in y axis
+            geom_rect(data=df[Start >= 0 & !outlier], 
+                      aes(xmin=Start, 
+                          xmax=End,ymin=as.numeric(ResourceId)-.4, 
+                          ymax=as.numeric(ResourceId)+.4, 
+                          fill=Value, 
+                          alpha=.9)
+                      ) + 
+            geom_rect(data=df[Start >= 0 & outlier], 
+                      aes(xmin=Start, 
+                          xmax=End,ymin=as.numeric(ResourceId)-.4, 
+                          ymax=as.numeric(ResourceId)+.4, 
+                          fill=Value, 
+                          alpha=1)
+                      ) 
+    } else {
+        basic <-  ggplot(df[Start >= 0,], aes(x=Start, y=factor(ResourceId))) + # only to show Resources names in y axis
+            geom_rect(data=df[Start >= 0], 
+                      aes(xmin=Start, 
+                          xmax=End,ymin=as.numeric(factor(ResourceId))-.4, 
+                          ymax=as.numeric(factor(ResourceId))+.4, 
+                          fill=Value, 
+                          alpha=ifelse(outlier, 1, .9))
+                      )  
+
+    }
+    basic <- basic + scale_fill_manual(values=c("#4daf4a", "#e41a1c", "#984ea3", "#377eb8", "#FFFF81", "#FFFF81"), name="") +
+        scale_y_discrete("Resources", expand=c(.02,.02)) +
+        scale_alpha(range=c(0.5,1)) +
+        scale_x_continuous("")  + 
+        # cosmetics
+        theme_bw() + 
+        theme(legend.position="bottom") + 
+        guides(linetype=FALSE, alpha=FALSE, fill=guide_legend(nrow=1,byrow=TRUE, order=1), color=guide_legend(nrow=1,byrow=TRUE, order=2))
+    return(basic)
+}
+#+end_src
+
+#+RESULTS: ganttoutliers
+
+*** Gantt with Estimation+Outliers
+#+name: ganttestimationoutliers
+#+begin_src R :results output :session R3  :var fdep=makespanestimation :var fdep2=idlepercentage :var fdep3=cpestimation :var fdep6=ganttoutliers :noexport:
+gantt_estimationoutliers <- function(df, plotly=FALSE, idlePercentage=TRUE){
+
+    tmpcpEnd <- df %>% group_by(Sched, r) %>% summarize(y=nlevels(ResourceId)/2, End=max(End))
+
+    ncpu  <- nlevels(droplevels(df[grepl("CPU", ResourceId)]$ResourceId))
+    ncuda <- nlevels(droplevels(df[grepl("CUDA", ResourceId)]$ResourceId))
+
+    tmpEstimation <- rbindlist(
+         lapply(levels(df$Sched),
+                function(sch, alldf) {
+                    alldf <- droplevels(alldf[Sched==sch,])
+                    rbindlist(lapply(levels(alldf$r), 
+                                     function(rr, sc, alld) {
+                                         if("speed" %in% names(alld[r==rr])){
+                                             data.table(Sched=sc, r=rr, speed=unique(alld[r==rr]$speed), nlevRes=nlevels(alld[r==rr]$ResourceId), Time=makespanestimation(alld[Sched == sc & r == rr, .(ResourceId, Duration, Value, JobId)] %>% mutate(Type=ifelse(grepl("CUDA", ResourceId), "CUDA", "CPU")) %>% group_by(Type, Value) %>% summarize(Mean=mean(Duration), Num=(length(Duration))), ncpu,ncuda )$objval)
+                                         } else {
+                                             data.table(Sched=sc, r=rr, nlevRes=nlevels(alld[r==rr]$ResourceId), Time=makespanestimation(alld[Sched == sc & r == rr, .(ResourceId, Duration, Value, JobId)] %>% mutate(Type=ifelse(grepl("CUDA", ResourceId), "CUDA", "CPU")) %>% group_by(Type, Value) %>% summarize(Mean=mean(Duration), Num=(length(Duration))), ncpu,ncuda )$objval)
+                                         }
+                                     }
+                                   , sc=sch, alld=alldf[Sched==sch] ))
+                }
+              , alldf=df)
+    )
+
+    tmpCPEstimation <- rbindlist(
+        lapply(levels(df$Sched),
+               function(sch, alldf) {
+                   alldf <- droplevels(alldf[Sched==sch,])
+                   rbindlist(lapply(levels(alldf$r), 
+                                    function(rr, sc, alld) {
+                                        if("speed" %in% names(alld[r==rr])){
+                                            data.table(Sched=sc, r=rr, speed=unique(alld[r==rr]$speed), nlevRes=nlevels(alld[r==rr]$ResourceId), Time=cpestimation(alld[Sched == sc & r == rr, .(ResourceId, Duration, Value, JobId)] %>% mutate(Type=ifelse(grepl("CUDA", ResourceId), "CUDA", "CPU")) %>% group_by(Type, Value) %>% summarize(Mean=mean(Duration), Num=(length(Duration))), ncpu,ncuda ))
+                                        } else {
+                                            data.table(Sched=sc, r=rr, nlevRes=nlevels(alld[r==rr]$ResourceId), Time=cpestimation(alld[Sched == sc & r == rr, .(ResourceId, Duration, Value, JobId)] %>% mutate(Type=ifelse(grepl("CUDA", ResourceId), "CUDA", "CPU")) %>% group_by(Type, Value) %>% summarize(Mean=mean(Duration), Num=(length(Duration))), ncpu,ncuda ))
+                                        }
+                                    }
+                                  , sc=sch, alld=alldf[Sched==sch] ))
+               }
+             , alldf=df)
+    )
+
+
+
+
+    res <- gantt_outliers(df, plotly) +
+        # makespan
+        geom_text(data=tmpcpEnd, aes(x=End, y=y, label=round(End,0)), angle=90) +  
+
+        # critical path estimation
+        geom_vline(data=tmpCPEstimation, aes(xintercept=Time), size=5, alpha=.7, color="gray") +
+
+        # critical path estimation - text
+        geom_text(data=tmpCPEstimation, aes(x=Time, y= nlevRes/1.4), label="CPE", angle=90, color="black") + # critical path estimation
+        geom_text(data=tmpCPEstimation, aes(x=Time, y= nlevRes/2, label=round(Time,0)), angle=90, color="black") +
+
+        # estimated makespan
+        geom_vline(data=tmpEstimation, aes(xintercept=Time), size=5, alpha=.7, color="gray") +
+
+        # estimated makespan - text
+        geom_text(data=tmpEstimation, aes(x=Time, y= nlevRes/1.4), label="ABE", angle=90, color="black") + # makespan estimation
+        geom_text(data=tmpEstimation, aes(x=Time, y= nlevRes/2, label=round(Time, 0)), angle=90, color="black")  
+
+    if(idlePercentage){
+        # percentage of idle
+        res <- res + geom_text(data=rbindlist(
+                                   lapply(levels(df$Sched),
+                                          function(sch, alldf) {
+                                              rbindlist(lapply(levels(alldf$r), 
+                                                               function(rr, sc, alld) {
+                                                                   aux <- idlepercentage(alld[(Value %in% c("Idle", "Sleeping")) & Start > 0 & r==rr,], alld[ r==rr,] )
+                                                                   aux$r <- rr
+                                                                   if("speed" %in% names(alld[r==rr])){
+                                                                       aux$speed <- unique(alld[r==rr]$speed)
+                                                                   }
+                                                                   aux
+                                                               }
+                                                             , sc=sch, alld=alldf[Sched==sch]))
+                                          }
+                                        , alldf=df)
+                               ), aes(x=1.05*max(End), y=ResourceId, label=percent(Ratio/100)),
+                               show.legend=FALSE, size=3.8) 
+    }
+   
+    return(res)
+}
+#+end_src
+
+#+RESULTS: ganttestimationoutliers
+
+*** Gantt with potrf Dependencies+Outliers
+#+name: ganttpotrfdepoutliers
+#+begin_src R :results output :session R3  :var fdep=makespanestimation :var fdep2=idlepercentage :var fdep3=cpestimation :var fdep6=criticalPath :var fdep7=indeppotrfcp  :var fdep8=computedependenciesjobid :var fdep9=ganttoutliers :var fdep10=ganttestimationoutliers  :noexport:
+gantt_potrfdepoutliers <- function(df, dfdep, maxR, plotly=FALSE, idlePercentage=TRUE){
+
+    tmpcpEnd <- df %>% group_by(Sched, r) %>% summarize(y=nlevels(ResourceId)/2, End=max(End))
+
+    tmpcpPotrf <- rbindlist(lapply(levels(df$Sched),
+                                   function(sch, alldf, alldfdep) {
+                                       rbindlist(lapply(levels(alldf$r), 
+                                                        function(rr, sc, alld, allddep) {
+                                                            aux <- rbindlist(lapply(df[Value=="dpotrf" & Sched==sc & r==rr ]$JobId,
+                                                                                    function(id, df, depdf, maxRecursion){
+                                                                                        criticalPathTrack(id, computeDependenciesbyJobId(id, df, depdf, maxRecursion))
+                                                                                    }, df=alld[r==rr,], depdf=allddep[r==rr,], maxRecursion=maxR ))
+                                                            if(!empty(aux)){
+                                                                aux$Sched <- sc
+                                                                aux$r <- rr
+                                                                aux$delay <- aux$Start - aux$DepEnd
+                                                                if("speed" %in% names(alld[r==rr])){
+                                                                    aux$speed <- unique(alld[r==rr]$speed)
+                                                                }
+                                                                merge(aux, indepPotrfCP(aux), by.x="Id", by.y="id")
+                                                            } else {     
+                                                                aux
+                                                            }
+                                                        }
+                                                      , sc=sch, alld=alldf[Sched==sch,], allddep=alldfdep[Sched==sch,]))
+                                   }
+                                 , alldf=df, alldfdep=dfdep)) 
+
+    res <- gantt_estimationoutliers(df, plotly, idlePercentage) +
+        # dependencies
+        geom_segment(data=tmpcpPotrf, aes(x=Start, y=ResourceId, xend=DepEnd, yend=DepResourceId, color=factor(pathid)), alpha=1, show.legend=FALSE ) 
+
+    if(plotly){ # alpha parameter has a different behavior in plotly, so to get the same result we should draw the border without use alpha (report this as a plotly bug)
+        res <- res + 
+            geom_segment(data=tmpcpPotrf, aes(x=DepStart, y=as.numeric(DepResourceId)-.4, xend=DepEnd, yend=as.numeric(DepResourceId)-.4, color=factor(pathid) ) ) +
+            geom_segment(data=tmpcpPotrf, aes(x=DepStart, y=as.numeric(DepResourceId)+.4, xend=DepEnd, yend=as.numeric(DepResourceId)+.4, color=factor(pathid) ) ) +
+            geom_segment(data=tmpcpPotrf, aes(x=DepStart, y=as.numeric(DepResourceId)+.4, xend=DepStart, yend=as.numeric(DepResourceId)-.4, color=factor(pathid) ) ) +
+            geom_segment(data=tmpcpPotrf, aes(x=DepEnd, y=as.numeric(DepResourceId)+.4, xend=DepEnd, yend=as.numeric(DepResourceId)-.4, color=factor(pathid) ) ) 
+    } else {
+        res <- res + 
+            geom_rect(data=tmpcpPotrf, aes(xmin=DepStart, ymin=as.numeric(DepResourceId)-.4, xmax=DepEnd, ymax=as.numeric(DepResourceId)+.4, color=factor(pathid) ), alpha=0) 
+    }
+    return(res)
+}
+#+end_src
+
+#+RESULTS: ganttpotrfdepoutliers
+
+** Small Matrices 12*960
+*** Processing raw files
+#+name: rawDir12
+#+begin_src sh :results output  :var rawPath="./data/chameleon-idcin2-604020/12/" :cache yes :noexport:
+    tmpDir=$(mktemp -d)
+    echo -n "$tmpDir"
+    for file in `find $rawPath -name "SoloStarpuData-*-*org"`;  do 
+        filen=`basename $file`
+	Sched=`echo $filen | cut -d"-" -f2`;  
+	rep=`echo $filen | cut -d"-" -f3`; 
+	rep=`echo $rep | cut -d"." -f1`; 
+	./get_trace.sh -t $file $tmpDir/paje-$Sched-$rep; 
+	grep "nready\|nsubmitted" $tmpDir/paje-$Sched-$rep.trace > $tmpDir/paje-$Sched-$rep-sub-ready-tmp.txt
+	tail -n +3 $tmpDir/paje-$Sched-$rep-sub-ready-tmp.txt > $tmpDir/paje-$Sched-$rep-sub-ready.txt
+	./get_tasksrec.sh $file $tmpDir/tasks-$Sched-$rep; 
+	cat $tmpDir/tasks-$Sched-$rep.rec | sed -n '/^DependsOn\|^JobId/p' | sed  's/JobId: //g' | sed  ':a;N;$!ba;s/\nDependsOn: /,/g' >  $tmpDir/tasks-$Sched-$rep.rec.csv ;
+    done
+#+end_src
+
+
+
+*** Loading files
+#+name: data12
+#+begin_src R :results output :session R3  :var rawDir12=rawDir12 :var fdep=readmultiplecsv :var fdep2=readmultipletasksrec :cache yes :noexport:
+dtAll12 <- readMultipleCsv(rawDir12, "*states.csv")
+dtDep12 <- readMultipleTasksRec(rawDir12, "*.rec.csv")
+#+end_src
+
+#+RESULTS[a46451fe86ad4d082ef57d3cb78dba56cbe8aa2b]: data12
+
+
+*** Paper Pictures
+**** 1B - Half size gantt with dependencies and outliers (half width)
+#+name: small
+#+begin_src R :results output graphics :file 12-gantt-dep-outliers.pdf  :width 12.4 :height 6 :session R3 :var fdep=ganttpotrfdepoutliers :noexport:
+  MinX <- 25 # avoid white space before first object
+  MaxX <- max(dtAll12[r=="1" & Sched=="dmda" ]$End + 25) 
+  gantt_potrfdepoutliers(dtAll12[r=="1" & Sched=="dmda" ], dtDep12[r=="1" & Sched=="dmda" ], 3) + scale_x_continuous("Time [ms]") +
+     theme(legend.box = "horizontal", legend.margin = unit(-0.07, "cm"), legend.background = element_blank()) + scale_color_discrete(name="Critical Paths") + coord_cartesian(xlim=c(20, MaxX)); 
+#+end_src
+
+#+RESULTS: small
+[[file:12-gantt-dep-outliers.pdf]]
+
+***** plotly version
+#+name: smallplotly
+#+begin_src R :results value file :var htmlout="12-gantt-dep-outliers.html" :exports results :session R3  :noexport:
+htmlwidgets::saveWidget(as.widget(
+                 ggplotly(gantt_potrfdepoutliers(dtAll12[r=="1" & Sched=="dmda" ], dtDep12[r=="1" & Sched=="dmda" ], 3, plotly=TRUE) + scale_x_continuous("Time [ms]") +
+                          theme(legend.box = "horizontal", legend.margin = unit(-0.07, "cm"), legend.background = element_blank()) + scale_color_discrete(name="Critical Paths") + coord_cartesian(xlim=c(20, MaxX)))
+             ), htmlout)
+print(htmlout)
+#+end_src
+
+#+RESULTS: smallplotly
+[[file:half-size-gantt-dep-outliers.html]]
+
+
+
+
+*** Generate pdf pictures
+Execute this code (ctrl+c ctrl+c) to generate all the figures used in the paper
+#+name: generatepictures
+#+begin_src R :results output  :session R3 :var dep=data12 :var gdep=small :var igdep=smallplotly  :noexport:
+print(sprintf("Figure 1 (pdf version): %s", gdep))
+print(sprintf("Figure 1 (interactively html version): %s", igdep))
+#+end_src
+
+
+#+name: croppdfs
+#+begin_src sh :results output  :var dep=generatepictures :var gdep=pdfcrop(file="./12-gantt-dep-outliers.pdf") :noexport:
+   print(sprintf("Figure 1 (cropped pdf version): %s", gdep))
+#+end_src
+
+
+
+
+* Reproducing this paper                                           :noexport: 
+1) Execute the following code block (C-c C-c)
+#+begin_src sh :results output :var dep2=ieeetran :var dep=croppdfs
+   make distclean
+   make 
+#+end_src
+
+#+RESULTS:
+
+
+
+
+* The Paper							     :ignore:
+
+** Frontpage							     :ignore:
+#+BEGIN_LaTeX
+\title{Análise de Aplicação baseada em Tarefas em Arquitetura Híbrida CPU/GPU}
+
+\author{Vinícius Garcia Pinto\inst{1, 2}, Lucas Mello Schnorr\inst{1}, Arnaud Legrand\inst{2}}
+
+\address{Instituto de Informática -- Universidade Federal do Rio Grande do Sul
+  (UFRGS)\\
+  Porto Alegre -- Brasil
+\nextinstitute
+  CNRS - Univ. Grenoble Alpes -- France
+  \email{\{vgpinto, schnorr\}@inf.ufrgs.br, arnaud.legrand@inria.fr}
+}
+#+END_LaTeX
+
+
+#+LaTeX: \maketitle
+
+** Abstract							     :ignore:
+# resumo maximo 6 linhas (ideal 4)
+#+LaTeX: \begin{resumo} 
+  Este trabalho apresenta uma abordagem modular e incremental para
+  análise de desempenho de aplicações baseadas em tarefas em
+  arquiteturas híbridas. A estratégia proposta é construída sobre ferramentas
+  atuais para análise de dados como R, pjdump, ggplot e plotly. A
+  abordagem é validada por meio de um estudo de caso da fatoração de Cholesky.
+#+LaTeX: \end{resumo}
+
+** Introdução 
+
+Os atuais sistemas de Processamento de Alto Desempenho têm sido
+construídos com nós computacionais híbridos visando atender a
+crescente demanda por poder computacional. Entretanto, a exploração
+eficiente e escalável destas arquiteturas têm se tornado
+desafiadora. Uma solução em potencial para esta questão é a
+programação da aplicação utilizando um grafo de tarefas. No momento da
+execução, estas tarefas são mapeadas para o hardware da plataforma por
+meio de uma camada de software intermediária chamada /runtime/. Esta
+abordagem permite remover sincronizações artificiais, implementar
+politicas de escalonamento complexas bem como automatizar as
+transferências de dados.
+
+A execução de aplicações neste modelo de /hardware/ e /software/ é
+inerentemente estocástica. O mapeamento das tarefas pode mudar
+drasticamente de uma execução a outra. No contexto da análise de
+desempenho, a natureza dinâmica das execuções torna ineficiente o uso
+de ferramentas clássicas de análise de desempenho pois estas foram
+projetadas majoritariamente para análise de aplicações bem
+estruturadas (p. ex. BSP ou MPI). Neste trabalho, nós apresentamos uma
+abordagem construída sobre ferramentas modernas e genéricas para
+análise de dados (p. ex. R, ggplot, plotly, paje_dump). Construída
+sobre /scripts/, esta abordagem permite criar visualizações ricas e
+customizáveis. 
+
+
+** Metodologia
+#+LaTeX: \label{sec:firstpage}
+A abordagem proposta permite representar execuções de maneira visual utilizando
+traços de execução obtidos previamente. Estes traços são carregados a
+partir de arquivos texto (CSV) para um ambiente R onde os
+estados representados são limpos, filtrados e sintetizados
+estatisticamente. Após esta etapa, pode-se obter um diagrama
+básico de Gantt representando a execução. Por meio de uma estratégia
+modular e incremental, é possível enriquecer a visualização básica
+adicionando informações relevantes como arestas de dependências entre
+as tarefas, estimativas de /makespan/ e porcentagem de tempo
+ocioso. Além disso, por meio de gráficos auxiliares, pode-se
+visualizar outras informações inferidas do traço tais como a
+quantidade de tarefas disponível para execução em cada instante, a
+repartição de trabalho entre os recursos de processamento de
+diferentes tipos e a progressão da computação ao longo do tempo de
+execução \cite{vpa2016}. 
+
+# diagrama é enriquecido
+
+
+# representar graficamente execucoes a partir de arquivos texto
+# (traço, dependencias)
+
+# Falar de onde vem o traço
+# filtragem
+# plots incrementais
+# o mais podemos fazer
+# estimativas de makespan
+# duração das fases
+# repartição do trabalho entre cpu/gpu
+# citar artigo do VPA
+# gantt chart + phases + barras repartição cpu/gpu
+
+** Estudo de Caso: Fatoração de Cholesky
+A Figura \ref{fig:ganttDep} apresenta um diagrama de Gantt obtido
+com o /framework/ proposto a partir do traço da execução de uma
+fatoração de Cholesky proveniente do pacote de álgebra linear Chameleon
+\cite{chameleon}.  
+Neste exemplo, a visualização básica foi enriquecida com informações
+sobre o tempo ocioso de cada recurso, estimativas do /makespan/ (CPE e
+ABE), realçamento de estados com duração consideravelmente maior e
+arestas de caminho crítico das tarefas /dpotrf/. Estas informações adicionais permitem
+identificar problemas cujo tratamento pode levar a ganhos de
+desempenho. O percentual de tempo ocioso (a direita do gráfico)
+permite identificar um desbalanceamento da carga de trabalho entre as
+CPUs (ociosidade varia entre 75% e 34%) e GPUs (de 7.5% a
+10.4%). Pode-se identificar também algumas tarefas do tipo /dsyrk/ com
+duração anormal. As arestas do caminho crítico permitem identificar
+alguns erros de priorização entre as tarefas (p.ex em CUDA2, entre
+565ms e 572ms, tarefas /dsyrk/ e /dtrsm/). Os valores CPE (353ms) e ABE
+(418ms) são limites inferiores para o /makespan/ , e ilustram que,
+teoricamente, há espaço para redução do valor observado atualmente
+(765ms). 
+
+Os dados deste experimento, o código para
+processamento do traço e geração da Figura \ref{fig:ganttDep}, bem como uma versão
+interativa (com plotly) da mesma estão disponíveis na versão reprodutível deste
+trabalho em http://perf-ev-runtime.gforge.inria.fr/erad2017. 
+# aqui apresentar rapidamente o cholesky
+# apresentar o projeto morse + starpu
+# falar dos outliers
+# falar da figura apresentada e dizer que ilustra algumas das
+# funcionalidades do framework proposto, (por link pra versao
+# interativa)
+  # nao esquecer de dizer da maquina onde executou, to tamanho da
+  # entrada, do tamanho do bloco e do algoritmo de escalonamento utilizado.
+# falar do lado reprodutivel por link pros dados
+
+#+BEGIN_LaTeX
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{12-gantt-dep-outliers-crop.pdf}
+\caption{Representação visual da execução de uma fatoração de Cholesky ($12x12$ blocos de $960$) em nó com 28 núcleos (2x Intel Xeon E5-2697v3) e 3 GPUs (NVIDIA Titan X). Execução com Chameleon+StarPU e escalonador DMDA.}
+\label{fig:ganttDep}
+\end{figure}
+#+END_LaTeX
+
+
+#+LaTeX: \bibliographystyle{sbc}
+#+LaTeX: \bibliography{erad2017}

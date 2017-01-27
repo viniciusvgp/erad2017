@@ -872,7 +872,7 @@ customizáveis.
 ** Metodologia
 #+LaTeX: \label{sec:firstpage}
 A abordagem proposta permite representar execuções de maneira visual utilizando
-traços de execução obtidos previamente. Estes traços são carregados a
+rastros de execução obtidos previamente. Estes rastros são carregados a
 partir de arquivos texto (CSV) para um ambiente R onde os
 estados representados são limpos, filtrados e sintetizados
 estatisticamente. Após esta etapa, pode-se obter um diagrama
@@ -881,7 +881,7 @@ modular e incremental, é possível enriquecer a visualização básica
 adicionando informações relevantes como arestas de dependências entre
 as tarefas, estimativas de /makespan/ e porcentagem de tempo
 ocioso. Além disso, por meio de gráficos auxiliares, pode-se
-visualizar outras informações inferidas do traço tais como a
+visualizar outras informações inferidas do rastro tais como a
 quantidade de tarefas disponível para execução em cada instante, a
 repartição de trabalho entre os recursos de processamento de
 diferentes tipos e a progressão da computação ao longo do tempo de
@@ -891,9 +891,9 @@ execução \cite{vpa2016}.
 
 
 # representar graficamente execucoes a partir de arquivos texto
-# (traço, dependencias)
+# (rastro, dependencias)
 
-# Falar de onde vem o traço
+# Falar de onde vem o rastro
 # filtragem
 # plots incrementais
 # o mais podemos fazer
@@ -905,7 +905,7 @@ execução \cite{vpa2016}.
 
 ** Estudo de Caso: Fatoração de Cholesky
 A Figura \ref{fig:ganttDep} apresenta um diagrama de Gantt obtido
-com o /framework/ proposto a partir do traço da execução de uma
+com o /framework/ proposto a partir do rastro da execução de uma
 fatoração de Cholesky proveniente do pacote de álgebra linear Chameleon
 \cite{chameleon}.  
 Neste exemplo, a visualização básica foi enriquecida com informações
@@ -925,7 +925,7 @@ teoricamente, há espaço para redução do valor observado atualmente
 (765ms). 
 
 Os dados deste experimento, o código para
-processamento do traço e geração da Figura \ref{fig:ganttDep}, bem como uma versão
+processamento do rastro e geração da Figura \ref{fig:ganttDep}, bem como uma versão
 interativa (com plotly) da mesma estão disponíveis na versão reprodutível deste
 trabalho em http://perf-ev-runtime.gforge.inria.fr/erad2017. 
 # aqui apresentar rapidamente o cholesky

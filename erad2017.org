@@ -876,7 +876,7 @@ rastros de execução obtidos previamente. Estes rastros são carregados a
 partir de arquivos texto (CSV) para um ambiente R onde os
 estados representados são limpos, filtrados e sintetizados
 estatisticamente. Após esta etapa, pode-se obter um diagrama
-básico de Gantt representando a execução. Por meio de uma estratégia
+espaço/tempo representando a execução. Por meio de uma estratégia
 modular e incremental, é possível enriquecer a visualização básica
 adicionando informações relevantes como arestas de dependências entre
 as tarefas, estimativas de /makespan/ e porcentagem de tempo
@@ -904,7 +904,7 @@ execução \cite{vpa2016}.
 # gantt chart + phases + barras repartição cpu/gpu
 
 ** Estudo de Caso: Fatoração de Cholesky
-A Figura \ref{fig:ganttDep} apresenta um diagrama de Gantt obtido
+A Figura \ref{fig:ganttDep} apresenta um diagrama espaço/tempo obtido
 com o /framework/ proposto a partir do rastro da execução de uma
 fatoração de Cholesky proveniente do pacote de álgebra linear Chameleon
 \cite{chameleon}.  

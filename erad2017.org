@@ -816,7 +816,7 @@ print(sprintf("Figure 1 (interactively html version): %s", igdep))
 
 ** Frontpage							     :ignore:
 #+BEGIN_LaTeX
-\title{Análise de Aplicação baseada em Tarefas em Arquitetura Híbrida CPU/GPU}
+\title{Análise de Aplicação baseada em Tarefas \\ em Arquitetura Híbrida CPU/GPU}
 
 \author{Vinícius Garcia Pinto\inst{1, 2}, Lucas Mello Schnorr\inst{1}, Arnaud Legrand\inst{2}}
 

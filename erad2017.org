@@ -864,7 +864,7 @@ de ferramentas clássicas de análise de desempenho pois estas foram
 projetadas majoritariamente para análise de aplicações bem
 estruturadas (p. ex. BSP ou MPI). Neste trabalho, nós apresentamos uma
 abordagem construída sobre ferramentas modernas e genéricas para
-análise de dados (p. ex. R, ggplot, plotly, paje_dump). Construída
+análise de dados (R, ggplot, plotly, paje_dump). Construída
 sobre /scripts/, esta abordagem permite criar visualizações ricas e
 adaptáveis. 
 

@@ -862,7 +862,7 @@ drasticamente de uma execução a outra. No contexto da análise de
 desempenho, a natureza dinâmica das execuções torna ineficiente o uso
 de ferramentas clássicas de análise de desempenho pois estas foram
 projetadas majoritariamente para análise de aplicações bem
-estruturadas (p. ex. BSP ou MPI). Neste trabalho, nós apresentamos uma
+estruturadas, tais como BSP ou MPI. Neste trabalho, nós apresentamos uma
 abordagem construída sobre ferramentas modernas e genéricas para
 análise de dados (R, ggplot, plotly, paje_dump). Construída
 sobre /scripts/, esta abordagem permite criar visualizações ricas e

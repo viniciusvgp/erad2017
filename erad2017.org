@@ -887,21 +887,7 @@ repartição de trabalho entre os recursos de processamento de
 diferentes tipos e a progressão da computação ao longo do tempo de
 execução \cite{vpa2016}. 
 
-# diagrama é enriquecido
 
-
-# representar graficamente execucoes a partir de arquivos texto
-# (rastro, dependencias)
-
-# Falar de onde vem o rastro
-# filtragem
-# plots incrementais
-# o mais podemos fazer
-# estimativas de makespan
-# duração das fases
-# repartição do trabalho entre cpu/gpu
-# citar artigo do VPA
-# gantt chart + phases + barras repartição cpu/gpu
 
 ** Estudo de Caso: Fatoração de Cholesky
 A Figura \ref{fig:ganttDep} apresenta um diagrama espaço/tempo obtido

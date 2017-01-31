@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # -*- mode: org -*-
 
-#+TITLE: Blablabla
+#+TITLE: Análise de Aplicação baseada em Tarefas em Arquitetura Híbrida CPU/GPU
 #+AUTHOR: Vinícius Garcia Pinto, Lucas Mello Schnorr, Arnaud Legrand
 
 #+STARTUP: overview indent
@@ -807,7 +807,6 @@ print(sprintf("Figure 1 (interactively html version): %s", igdep))
    make 
 #+end_src
 
-#+RESULTS:
 
 
 
@@ -897,18 +896,19 @@ fatoração de Cholesky proveniente do pacote de álgebra linear Chameleon
 Neste exemplo, a visualização básica foi enriquecida com informações
 sobre o tempo ocioso de cada recurso, estimativas do /makespan/ (CPE e
 ABE), realçamento de estados com duração consideravelmente maior e
-arestas de caminho crítico das tarefas /dpotrf/. Estas informações adicionais permitem
+arestas de caminho crítico das tarefas \texttt{dpotrf}. Estas informações adicionais permitem
 identificar problemas cujo tratamento pode levar a ganhos de
 desempenho. O percentual de tempo ocioso (a direita do gráfico)
 permite identificar um desbalanceamento da carga de trabalho entre as
 CPUs (ociosidade varia entre 75% e 34%) e GPUs (de 7.5% a
-10.4%). Pode-se identificar também algumas tarefas do tipo /dsyrk/ com
+10.4%). Pode-se identificar também algumas tarefas do tipo \texttt{dsyrk} com
 duração anormal. As arestas do caminho crítico permitem identificar
 alguns erros de priorização entre as tarefas (p.ex em CUDA2, entre
-565ms e 572ms, tarefas /dsyrk/ e /dtrsm/). Os valores CPE (353ms) e ABE
+565ms e 572ms, tarefas \texttt{dsyrk} e \texttt{dtrsm}). Os valores CPE (353ms) e ABE
 (418ms) são limites inferiores para o /makespan/ , e ilustram que,
 teoricamente, há espaço para redução do valor observado atualmente
-(765ms). 
+(765ms). Trabalhos futuros terão foco no incremento das técnicas de
+visualização e na avaliação de outras aplicações.
 
 Os dados deste experimento, o código para
 processamento do rastro e geração da Figura \ref{fig:ganttDep}, bem como uma versão
@@ -933,6 +933,7 @@ trabalho em http://perf-ev-runtime.gforge.inria.fr/erad2017.
 \end{figure}
 #+END_LaTeX
 
+#+LaTeX: \vspace{-0.2cm}
 
 #+LaTeX: \bibliographystyle{sbc}
 #+LaTeX: \bibliography{erad2017}

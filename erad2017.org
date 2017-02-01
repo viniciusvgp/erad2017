@@ -891,6 +891,7 @@ Schnorr\inst{1}, Arnaud Legrand\inst{2}}
 
 ** Abstract							     :ignore:
 # resumo maximo 6 linhas (ideal 4)
+#+LaTeX: \vspace{-0.3cm}
 #+LaTeX: \begin{resumo} 
   Este trabalho apresenta uma abordagem modular e incremental para
   análise de desempenho de aplicações baseadas em tarefas em
@@ -898,7 +899,7 @@ Schnorr\inst{1}, Arnaud Legrand\inst{2}}
   atuais para análise de dados como R, pjdump, ggplot e plotly. A
   abordagem é validada por meio de um estudo de caso da fatoração de Cholesky.
 #+LaTeX: \end{resumo}
-
+#+LaTeX: \vspace{-0.4cm}
 ** Introdução 
 
 Os atuais sistemas de Processamento de Alto Desempenho têm sido

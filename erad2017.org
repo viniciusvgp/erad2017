@@ -873,13 +873,15 @@ loaded via a namespace (and not attached):
 #+BEGIN_LaTeX
 \title{Análise de Aplicação baseada em Tarefas \\ em Arquitetura Híbrida CPU/GPU}
 
-\author{Vinícius Garcia Pinto\inst{1, 2}, Lucas Mello Schnorr\inst{1}, Arnaud Legrand\inst{2}}
-
-\address{Instituto de Informática -- Universidade Federal do Rio Grande do Sul
-  (UFRGS)\\
-  Porto Alegre -- Brasil
+\author{Vinícius Garcia Pinto\inst{1, 2}\thanks{Este trabalho foi parcialmente 
+financiado por recursos do projeto HPC4E (http://www.hpc4e.eu), financiamento 689772 do 
+acordo internacional entre o programa H2020-EU e o MCTI/RNP-Brasil.}, Lucas Mello 
+Schnorr\inst{1}, Arnaud Legrand\inst{2}}
+\vspace{-0.3cm}
+\address{Instituto de Informática - Universidade Federal do Rio Grande do Sul - Brasil
 \nextinstitute
-  CNRS - Univ. Grenoble Alpes -- France
+  CNRS - Univ. Grenoble Alpes - France
+  \vspace{-0.2cm}
   \email{\{vgpinto, schnorr\}@inf.ufrgs.br, arnaud.legrand@inria.fr}
 }
 #+END_LaTeX
